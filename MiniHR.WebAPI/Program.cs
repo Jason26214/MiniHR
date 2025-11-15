@@ -1,4 +1,6 @@
 
+using Autofac.Extensions.DependencyInjection;
+
 namespace MiniHR.WebAPI
 {
     public class Program
@@ -7,6 +9,22 @@ namespace MiniHR.WebAPI
         {
             var builder = WebApplication.CreateBuilder(args);
 
+            // setting autofac
+            builder.Host.UseServiceProviderFactory(new AutofacServiceProviderFactory());
+
+            // CORS
+            var corsPolicyName = "AllowSpecificOrigin";
+            builder.Services.AddCors(options =>
+            {
+                options.AddPolicy(name: corsPolicyName,
+                                  policy =>
+                                  {
+                                      policy.WithOrigins("http://localhost:3000")
+                                            .WithMethods("GET", "POST", "PUT", "DELETE")
+                                            .WithHeaders("Authorization", "Content-Type");
+                                  });
+            });
+
             // Add services to the container.
 
             builder.Services.AddControllers();
@@ -14,6 +32,7 @@ namespace MiniHR.WebAPI
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
 
+            /* app */
             var app = builder.Build();
 
             // Configure the HTTP request pipeline.
@@ -24,6 +43,8 @@ namespace MiniHR.WebAPI
             }
 
             app.UseHttpsRedirection();
+
+            app.UseCors(corsPolicyName);
 
             app.UseAuthorization();
 

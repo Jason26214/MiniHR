@@ -5,6 +5,17 @@ VisualStudioVersion = 17.14.36705.20 d17.14
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MiniHR.WebAPI", "MiniHR.WebAPI\MiniHR.WebAPI.csproj", "{E4DF1784-A8CE-465B-AE90-8A31CBB27FEF}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{8EC462FD-D22E-90A8-E5CE-7E832BA40C5D}"
+	ProjectSection(SolutionItems) = preProject
+		.gitignore = .gitignore
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MiniHR.Domain", "MiniHR.Domain\MiniHR.Domain.csproj", "{DAF60CF6-7F56-4797-B3CA-5C09A5C804D1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MiniHR.Application", "MiniHR.Application\MiniHR.Application.csproj", "{55802210-6919-409F-B888-4153A68224AF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MiniHR.Infrastructure", "MiniHR.Infrastructure\MiniHR.Infrastructure.csproj", "{E6E31A8F-AEBF-4429-82BD-90E3282F1EFA}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +26,18 @@ Global
 		{E4DF1784-A8CE-465B-AE90-8A31CBB27FEF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{E4DF1784-A8CE-465B-AE90-8A31CBB27FEF}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{E4DF1784-A8CE-465B-AE90-8A31CBB27FEF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DAF60CF6-7F56-4797-B3CA-5C09A5C804D1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DAF60CF6-7F56-4797-B3CA-5C09A5C804D1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DAF60CF6-7F56-4797-B3CA-5C09A5C804D1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DAF60CF6-7F56-4797-B3CA-5C09A5C804D1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{55802210-6919-409F-B888-4153A68224AF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{55802210-6919-409F-B888-4153A68224AF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{55802210-6919-409F-B888-4153A68224AF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{55802210-6919-409F-B888-4153A68224AF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E6E31A8F-AEBF-4429-82BD-90E3282F1EFA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E6E31A8F-AEBF-4429-82BD-90E3282F1EFA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E6E31A8F-AEBF-4429-82BD-90E3282F1EFA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E6E31A8F-AEBF-4429-82BD-90E3282F1EFA}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
