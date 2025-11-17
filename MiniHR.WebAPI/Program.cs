@@ -1,5 +1,7 @@
 
 using Autofac.Extensions.DependencyInjection;
+using Microsoft.EntityFrameworkCore;
+using MiniHR.Infrastructure.Persistence;
 
 namespace MiniHR.WebAPI
 {
@@ -13,6 +15,7 @@ namespace MiniHR.WebAPI
             builder.Host.UseServiceProviderFactory(new AutofacServiceProviderFactory());
 
             // CORS
+            #region CORS
             var corsPolicyName = "AllowSpecificOrigin";
             builder.Services.AddCors(options =>
             {
@@ -24,11 +27,18 @@ namespace MiniHR.WebAPI
                                             .WithHeaders("Authorization", "Content-Type");
                                   });
             });
+            #endregion
 
             // Add services to the container.
 
+            // DbContext
+            #region DbContext
+            var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+            builder.Services.AddDbContext<MiniHrDbContext>(options =>
+                options.UseNpgsql(connectionString));
+            #endregion
+
             builder.Services.AddControllers();
-            // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
 
@@ -47,7 +57,6 @@ namespace MiniHR.WebAPI
             app.UseCors(corsPolicyName);
 
             app.UseAuthorization();
-
 
             app.MapControllers();
 
