@@ -1,7 +1,8 @@
-
+using Autofac;
 using Autofac.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 using MiniHR.Infrastructure.Persistence;
+using MiniHR.WebAPI.Modules;
 
 namespace MiniHR.WebAPI
 {
@@ -12,7 +13,13 @@ namespace MiniHR.WebAPI
             var builder = WebApplication.CreateBuilder(args);
 
             // setting autofac
+            #region autofac
             builder.Host.UseServiceProviderFactory(new AutofacServiceProviderFactory());
+            builder.Host.ConfigureContainer<ContainerBuilder>(containerBuilder =>
+            {
+                containerBuilder.RegisterModule(new AutofacModule());
+            });
+            #endregion
 
             // CORS
             #region CORS
