@@ -1,6 +1,8 @@
 using Autofac;
 using Autofac.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using MiniHR.Application.Profiles;
 using MiniHR.Infrastructure.Persistence;
 using MiniHR.WebAPI.Middleware;
 using MiniHR.WebAPI.Modules;
@@ -46,7 +48,20 @@ namespace MiniHR.WebAPI
                 options.UseNpgsql(connectionString));
             #endregion
 
+            // AutoMapper registration
+            builder.Services.AddAutoMapper(cfg =>
+            {
+                cfg.AddProfile<MappingProfile>();
+            }, typeof(MappingProfile).Assembly);
+
             builder.Services.AddControllers();
+
+            // To disable automatic model state validation
+            builder.Services.Configure<ApiBehaviorOptions>(options =>
+            {
+                options.SuppressModelStateInvalidFilter = true;
+            });
+
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
 
