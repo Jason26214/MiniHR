@@ -1,6 +1,6 @@
-﻿# 📘 Mini HR API - 技术设计与实施计划 (v3.4)
+﻿# 📘 Mini HR API - 技术设计与实施计划 (v4.4)
 
-**版本说明**: v3.4 (导师修正版)。此版本废除了 TDD 3.7 (自动过滤器)，确立了“手动控制响应”和“HTTP 200 策略”的核心原则，旨在构建一个逻辑清晰、高度可控的 API 系统。
+**版本说明**: **v4.4 (澳洲就业 - 终极修正版)**。此版本基于 v4.2，严格保留了所有关于 **Autofac (策略性保留)**、**Serilog (可观测性)** 和 **Policy-Based Auth** 的架构决策，仅补充了 Auth 中间件顺序、Swagger 配置以及细化了测试实施步骤。
 
 ## 第一部分：技术设计文档 (TDD - Technical Design Document)
 
@@ -8,12 +8,12 @@
 
 #### 1.1 目标
 
-本项目旨在构建一个简化版、企业级的人力资源管理 (HR) 后端系统。其架构设计将作为未来 "HR AI Agent" 项目的坚实基础，优先确保系统的模块化、可测试性与可扩展性。
+本项目旨在构建一个简化版、企业级的人力资源管理 (HR) 后端系统。其架构设计将作为未来 "HR AI Agent" 项目的坚实基础，优先确保系统的模块化、可测试性、合规性（RESTful 标准）及**生产环境可观测性 (Observability)**。
 
 #### 1.2 核心功能
 
-1. **认证授权**: 提供基于 JWT 的用户注册与登录，并实现基于策略 (Policy) 的权限控制。
-2. **员工管理**: 实现员工档案的增删改查 (CRUD)，并确保薪资等敏感数据的访问安全。
+1. **认证授权**: 基于 JWT 的用户注册与登录，重点实现复杂的**基于策略 (Policy-Based) 的权限控制**。
+2. **员工管理**: 实现员工档案的 CRUD 操作，支持大数据的分页查询。
 3. **简历处理**: 支持简历文件 (如 `.pdf`, `.docx`) 的上传、安全存储及后续解析数据的管理。
 
 ### 2.0 系统架构 (System Architecture)
@@ -29,207 +29,182 @@
 ```
 [层级]            [项目名 (Project)]         [职责 (Responsibilities)]
 -------------------------------------------------------------------------------------------------
-  API /           MiniHR.WebAPI              - Controllers (控制器), Middleware (中间件)
-Presentation                               - DTOs (数据传输对象), API Model Validation (模型验证)
- (展示层)                                  - Program.cs (DI容器配置, 管道配置)
-                                           - **Models/ApiResult.cs (统一响应模型)**
+  API /           MiniHR.WebAPI              - Controllers, Minimal APIs
+Presentation                               - DTOs, Global Exception Handling (IExceptionHandler)
+ (展示层)                                  - Program.cs (DI, Middleware, Serilog 配置)
+                                           - **Standard HTTP Responses (RESTful)**
     |
     v
-Application       MiniHR.Application         - Application Services (应用服务, 业务逻辑)
- (应用层)                                  - AutoMapper Profiles (对象映射配置)
-                                           - FluentValidation (业务验证规则)
+Application       MiniHR.Application         - Services (业务逻辑, 分页逻辑)
+ (应用层)                                  - AutoMapper Profiles
+                                           - FluentValidation
     |
     v
 Domain            MiniHR.Domain              - Entities (核心实体, e.g., Employee)
- (领域层)                                  - Repository Interfaces (仓储接口, e.g., IEmployeeRepository)
-                                           - Domain Events (领域事件 - 可选)
+ (领域层)                                  - Repository Interfaces (含分页定义)
                                            <-- [ 核心: 不依赖任何其他层 ] -->
     ^
     | (实现)
 Infrastructure    MiniHR.Infrastructure      - EF Core DbContext (数据库上下文)
- (基础设施层)                                - Repository Implementations (仓储实现)
-                                           - FileService (文件存储), JwtService (Token生成)
+ (基础设施层)                                - Repository Implementations (EF Core 查询)
+                                           - External Services (File, Jwt)
 -------------------------------------------------------------------------------------------------
 ```
 
 ### 3.0 横切关注点 (Cross-Cutting Concerns) - (核心架构决策)
 
-ASP.NET Core 管道将用于处理**意外**的全局异常和基础设施（如 CORS/Auth），但**业务响应的包装**将**手动**在 Controller 中完成。
+#### 3.1 依赖注入 (Dependency Injection) - (保留技术栈)
 
-**HTTP 响应黄金准则 (200-Only Strategy):**
+- **实现**: **Autofac**。
+- **状态**: 已集成并运行良好。
+- **理由**: 虽然 .NET 8 原生 DI 已足够强大，但我们保留 Autofac 以展示对遗留系统维护能力和高级 IOC 容器（如模块化注册）的掌控。这在澳洲企业级面试中是加分项。
 
-1. 所有 API 端点在**业务层面**（包括业务失败、参数错误、系统异常）**永远**返回 **HTTP 200 OK**。
-2. 客户端**永远**不依赖 HTTP 状态码判断业务结果。
-3. 客户端**必须**解析 JSON 响应体中的 `Success` (布尔值) 和 `Code` (数字) 字段。
+#### 3.2 HTTP 响应与错误处理 (RESTful + ProblemDetails)
 
-#### 3.1 统一响应模型 (Unified Response Model) (TDD 3.5)
+- **成功 (Success)**:
+  - `200 OK`: 请求成功，Body 直接返回数据对象 (JSON)。
+  - `201 Created`: 资源创建成功，Header 包含 `Location`，Body 为新资源数据。
+  - `204 No Content`: 请求成功（如删除/修改），无 Body。
+- **错误 (Error)**:
+  - 使用 **RFC 7807 ProblemDetails** 标准格式。
+  - 所有错误（4xx, 500）均返回包含 `type`, `title`, `status`, `detail`, `traceId` 等标准字段的 JSON。
+- **异常 (Exception)**:
+  - 全局异常处理器实现 `IExceptionHandler` 接口 (`GlobalExceptionHandler`)，捕获未处理异常并转换为 500 `ProblemDetails`（生产环境隐藏堆栈）。
 
-- **实现**: 定义 `ApiResult<T>` 类作为**所有**响应的“数据信封”。
+#### 3.3 结构化日志 (Structured Logging) - **(新增)**
 
-- **目标**: 无论成功或失败，前端始终能解析同一个 JSON 结构。
+- **实现**: **Serilog**。
+- **配置**:
+  - 替代 .NET 默认 Logger。
+  - 输出目标 (Sinks): Console (开发环境), File (生产环境, 按天滚动)。
+  - **Enrichers**: 自动附加 `MachineName`, `ThreadId`, `HttpRequestId` 等上下文信息，便于排查问题。
 
-- **结构定义** (`MiniHR.WebAPI/Models/ApiResult.cs`):
+#### 3.4 分页策略 (Pagination Strategy) - **(新增)**
 
-  ```
-  public class ApiResult<T>
-  {
-      // 业务是否成功
-      public bool Success { get; set; }
-  
-      // 自定义业务状态码 (复用 HTTP 语义: 200, 201, 400, 401, 403, 404, 500)
-      public int Code { get; set; }
-  
-      // 成功时的数据
-      public T? Data { get; set; }
-  
-      // 失败时的错误信息
-      public object? Error { get; set; }
-  
-      // (可选) 调试或提示消息
-      public string? Message { get; set; }
-  }
-  ```
+- **目标**: 防止大数据量查询导致的性能问题 (OOM)。
+- **实现**:
+  - 所有返回集合的 API (如 `GetAll`) **必须**支持分页。
+  - **请求参数**: `pageNumber` (默认 1), `pageSize` (默认 10, 最大 50)。
+  - **响应结构**: 返回 `PagedResult<T>`，包含 `items` 和 `metadata` (totalCount, totalPages 等)。
 
-#### 3.2 全局异常处理 (Global Exception Handling) (TDD 3.6)
+#### 3.5 Authentication & Authorization (重点)
 
-- **实现**: 自定义 `ExceptionMiddleware`。
-- **目标**: 仅用于捕获**未处理的、意外的**异常（例如 `NullReferenceException`、数据库连接超时等）。这是系统的最后一道防线。
-- **行为**:
-  1. `try...catch` 捕获管道中的异常。
-  2. 记录 **Error** 级别日志（包含堆栈信息）。
-  3. **手动**构建并返回一个 `ApiResult<object>`：
-     - `Success = false`
-     - `Code = 500`
-     - `Error = "服务器内部错误，请联系管理员"` (隐藏堆栈细节)
-  4. **关键**: 将 Response 的 HTTP StatusCode 设为 **200**。
-
-#### 3.3 业务逻辑验证 (Business Logic Validation)
-
-- **实现**: **在 Controller 方法内部**手动实现。
-- **目标**: 处理**已知的、预期的**业务分支（例如 参数校验失败、资源未找到、权限不足）。
-- **行为**:
-  1. Controller 检查 `ModelState.IsValid`。如果不通过，返回 `ApiResult` (`Code=400`, `Success=false`, `Error=校验错误详情`)。
-  2. Controller 调用 Service。如果 Service 返回 null (未找到)，返回 `ApiResult` (`Code=404`, `Success=false`)。
-  3. **关键**: 这些“错误”在 HTTP 层面依然是 **200 OK**。
-
-#### 3.4 CORS (Cross-Origin Resource Sharing)
-
-- **实现**: `app.UseCors()`。
-- **策略**: "AllowSpecificOrigin"。允许前端开发服务器 (`http://localhost:3000`) 访问，并显式允许 `Authorization` 和 `Content-Type` 头部。
-
-#### 3.5 Authentication & Authorization
-
-- **实现**: `app.UseAuthentication()` + `app.UseAuthorization()`。
-- **行为**: 401 (未登录) 和 403 (无权限) 通常由框架在中间件层直接返回。
-  - *注*: 为了保持 200-Only 策略的绝对统一，高级做法是自定义 `JwtBearerEvents` 来拦截 401/403 并重写为 200 OK 的 `ApiResult`。在本项目初期，我们可以暂且容忍 401/403 作为 HTTP 状态码存在，或者在后续进阶任务中统一处理。
+- **Authentication (认证)**: 使用 JWT (JSON Web Tokens)。
+- **Authorization (授权)**: 使用 **Policy-Based Authorization** (基于策略)。
+  - **Policy 示例**:
+    - `"AdminOnly"`: RequireRole("Admin")
+    - `"EmployeeRead"`: RequireClaim("Permission", "Employee.Read")
+  - 这种方式比简单的 Role-Based 更灵活，是澳洲中大型项目的标配。
 
 ### 4.0 数据库设计 (Database Design - PostgreSQL)
 
-采用 **EF Core Code-First** 模式。
+采用 **EF Core Code-First** + **PostgreSQL** (澳洲初创和中型企业首选)。
 
-#### 4.1 Table: `Users`
-
-- `Id` (Guid, PK)
-- `Username` (string, Unique Index)
-- `PasswordHash` (string)
-- `Role` (string) - (e.g., "Admin", "User")
-
-#### 4.2 Table: `Employees`
-
-- `Id` (Guid, PK)
-- `FirstName` (string)
-- `LastName` (string)
-- `Email` (string, Unique Index)
-- `Position` (string)
-- `Salary` (**decimal(18, 2)**)
-- `HireDate` (**DateTimeOffset**)
-- `IsDeleted` (bool) - 软删除
-
-#### 4.3 Table: `Resumes`
-
-- `Id` (Guid, PK)
-- `EmployeeId` (Guid, FK -> Employees.Id)
-- `OriginalFileName` (string)
-- `StoredFilePath` (string) - 物理路径
-- `ParsedContent` (string, Nullable) - AI 解析文本
-- `UploadedAt` (DateTimeOffset)
+- **Users**: `Id`, `Username`, `PasswordHash`, `Role`
+- **Employees**: `Id`, `FirstName`, `LastName`, `Email`, `Position`, `Salary`, `HireDate`, `IsDeleted`
+- **Resumes**: `Id`, `EmployeeId`, `OriginalFileName`, `StoredFilePath`, `ParsedContent`, `UploadedAt`
 
 ### 5.0 API 端点定义 (Endpoint Definitions)
 
-所有端点 (除了可能的 401/403) **永远**返回 **HTTP 200 OK**。
-
-- `POST /api/auth/register` -> `ApiResult<object>`
-- `POST /api/auth/login` -> `ApiResult<string>` (Data 为 Token)
-- `GET /api/employees` -> `ApiResult<IEnumerable<EmployeeDto>>`
-- `GET /api/employees/{id}` -> `ApiResult<EmployeeDto>`
-- `POST /api/employees` -> `ApiResult<EmployeeDto>` (Code: 201)
-- `PUT /api/employees/{id}` -> `ApiResult<EmployeeDto>`
-- `DELETE /api/employees/{id}` -> `ApiResult<object>` (Code: 204)
-- `POST /api/employees/{id}/resumes` -> `ApiResult<ResumeDto>`
+- `POST /api/auth/register` -> `200 OK`
+- `POST /api/auth/login` -> `200 OK` (返回 `{ "token": "..." }`)
+- `GET /api/employees?pageNumber=1&pageSize=10` -> `200 OK` (返回 `PagedResult<EmployeeDto>`)
+- `GET /api/employees/{id}` -> `200 OK` 或 `404 Not Found`
+- `POST /api/employees` -> `201 Created` (需 "AdminOnly" Policy)
+- `PUT /api/employees/{id}` -> `204 No Content` (需 "AdminOnly" Policy)
+- `DELETE /api/employees/{id}` -> `204 No Content` (需 "AdminOnly" Policy)
+- `POST /api/employees/{id}/resumes` -> `200 OK` (返回 `ResumeDto`)
 
 ### 6.0 关键技术栈 (Tech Stack Checklist)
 
 - [ ] **Framework**: .NET 8
-- [ ] **Web API**: ASP.NET Core Controllers
-- [ ] **Database**: PostgreSQL 16
-- [ ] **ORM**: Entity Framework Core (EF Core) 8
-- [ ] **Dependency Injection**: **Autofac**
-- [ ] **Authentication**: JWT (Bearer Token)
-- [ ] **Authorization**: Policy-Based
-- [ ] **Mapping**: **AutoMapper**
-- [ ] **Testing**: **xUnit** + **Moq** + **WebApplicationFactory**
+- **Core Architecture**:
+  - [x] **DI Container**: **Autofac** (已就绪)
+  - [ ] **Logging**: **Serilog** (结构化日志)
+  - [ ] **Error Handling**: **IExceptionHandler + ProblemDetails (RFC 7807)**
+- **Security**:
+  - [ ] **Auth**: JWT (Bearer Token)
+  - [ ] **Authorization**: **Policy-Based**
+  - [ ] **Encryption**: BCrypt.Net-Next
+- **Data & Logic**:
+  - [ ] **Web API**: ASP.NET Core Controllers (RESTful)
+  - [x] **Database**: PostgreSQL 16
+  - [x] **ORM**: Entity Framework Core (EF Core) 8
+  - [ ] **Mapping**: AutoMapper
+  - [ ] **Validation**: FluentValidation
+- **Testing (QA)**:
+  - [ ] **Unit Tests**: xUnit, Moq, FluentAssertions
+  - [ ] **Integration Tests**: WebApplicationFactory, Testcontainers
 
 ## 第二部分：项目实施计划 (Project Implementation Plan)
 
-### 🏁 阶段一：项目骨架 (Project Skeleton) - [已完成]
+### 🏁 阶段一 & 💾 阶段二 - [已完成]
 
-**目标**: 搭建符合 Clean Architecture 的项目结构，配置核心 DI 与中间件管道。
+(项目骨架、数据库实体、EF Core 配置、Autofac 基础配置均已就绪)
 
-- **[x] 任务 1.1 ~ 1.5**: (环境, Solution, 引用, Autofac, CORS) - **已就绪**
+### 🔄 阶段三：RESTful 重构与基础设施 (Standardization & Infra)
 
-### 💾 阶段二：数据持久化 (Data Persistence) - [已完成]
+**目标**: 搭建符合澳洲标准的错误处理和日志系统，清理旧代码。
 
-**目标**: 掌握 EF Core Code First 完整生命周期。
+- **[ ] 任务 3.1 (日志系统)**:
+  - 引入 `Serilog.AspNetCore`。
+  - 在 `Program.cs` 中配置 Serilog (Console + Enrichers)。
+- **[ ] 任务 3.2 (错误处理)**:
+  - 删除 `ApiResult.cs` 和旧中间件。
+  - 注册 `AddProblemDetails()`。
+  - 实现 `GlobalExceptionHandler` 并在管道中注册。
+- **[ ] 任务 3.3 (Controller 初步清洗)**:
+  - 将 `EmployeesController` 的返回值改为 `IActionResult`，移除手动 `ApiResult` 包装，暂时保持无 Auth 状态。
 
-- **[ ] 任务 2.1 (定义实体)**:
-  - 在 `Domain` 层编写 `User`, `Employee`, `Resume`。
-- **[ ] 任务 2.2 (配置 DbContext)**:
-  - 在 `Infra` 层编写 `MiniHrDbContext`，配置 Fluent API (精度, 索引)。
-- **[ ] 任务 2.3 (数据库迁移)**:
-  - 注册 DbContext，执行 Migration，生成数据库。
+### 🛡️ 阶段四：认证与授权 (Auth & Security) - [核心重点]
 
-### 🔌 阶段三：业务逻辑与 API 管道 (Services & Middleware)
+**目标**: 实现完整的用户注册登录流程，并配置基于策略的权限控制。
 
-**目标**: 实现业务逻辑，构建统一响应体系。
+- **[ ] 任务 4.1 (安全基础)**:
+  - 引入 `BCrypt.Net-Next`。
+  - 在 `Infrastructure` 层实现 `PasswordHasher`。
+- **[ ] 任务 4.2 (JWT 服务)**:
+  - 在 `appsettings.json` 配置 JWT Settings。
+  - 在 `Infrastructure` 层实现 `JwtTokenGenerator`。
+- **[ ] 任务 4.3 (Auth API)**:
+  - 创建 `AuthController`，实现 `POST /register` 和 `POST /login`。
+- **[ ] 任务 4.4 (配置鉴权管道)**:
+  - 在 `Program.cs` 配置 `AddAuthentication().AddJwtBearer(...)`。
+  - **关键**: 确保 `app.UseAuthentication()` 必须在 `app.UseAuthorization()` **之前**调用。
+- **[ ] 任务 4.5 (配置 Policy 授权)**:
+  - 使用 `AddAuthorization` 定义策略 `"AdminOnly"`。
+  - 在 Controller 上应用 `[Authorize(Policy = "AdminOnly")]`。
+- **[ ] 任务 4.6 (Swagger 支持)**:
+  - 配置 Swagger 以支持 JWT Bearer Token 输入（添加 `AddSecurityDefinition` 和 `AddSecurityRequirement`），显示“小锁”图标。
+- **[ ] 任务 4.7 (CORS 检查)**:
+  - 检查 CORS 策略，显式允许 `Authorization` 标头，防止跨域被拦截。
 
-- **[ ] 任务 3.1 (Repository 模式)**:
-  - 定义并实现 `IEmployeeRepository`。
-- **[ ] 任务 3.2 (DTO 与 AutoMapper)**:
-  - 定义 DTOs，配置 AutoMapper 映射。
-- **[ ] 任务 3.3 (Service 逻辑)**:
-  - 编写 `EmployeeService`，实现核心业务。
-- **[ ] 任务 3.4 (统一响应模型 - 定义)**:
-  - 在 `MiniHR.WebAPI/Models` 中定义 `ApiResult<T>` 和 `ApiError`。
-- **[ ] 任务 3.5 (Controller 实现)**:
-  - 编写 `EmployeesController`。
-  - **严格遵守**: 所有 Action 必须返回 `ApiResult<T>`。
-  - **手动处理**: `ModelState` 检查、`404` 检查、成功响应包装。
-- **[ ] 任务 3.6 (自定义中间件 - 全局异常)**:
-  - 实现 `ExceptionMiddleware`。
-  - 捕获意外异常 -> 记录日志 -> 返回 `200 OK` 的 `ApiResult` (Code 500)。
+### 🚀 阶段五：API 补全与业务逻辑 (Business Logic & Pagination)
 
-### 🛡️ 阶段四：安全与鉴权 (Security & Authorization)
+**目标**: 按照逻辑顺序完成剩余 API 开发，并加入分页。
 
-**目标**: 保护 API 端点。
+- **[ ] 任务 5.1 (分页基础设施)**:
+  - 定义 `PagedResult<T>` 和 `PaginationParams`。
+  - 为 `IQueryable` 编写 `ToPagedListAsync` 扩展方法。
+- **[ ] 任务 5.2 (完善 Employee API)**:
+  - 修改 `GetById` 和 `GetAll` (加入分页)。
+  - 实现 `Update` (PUT) 和 `Delete` (DELETE)。
+- **[ ] 任务 5.3 (Resume API 开发)**:
+  - 实现 `IFileService`。
+  - 实现 `POST /employees/{id}/resumes`: 接收 `IFormFile`，保存文件，写入数据库。
 
-- **[ ] 任务 4.1 (密码哈希)**: `BCrypt.Net` 实现。
-- **[ ] 任务 4.2 (JWT)**: Token 生成与验证。
-- **[ ] 任务 4.3 (Policy)**: 配置 "AdminOnly" 策略。
+### ✅ 阶段六：测试与验收 (Quality Assurance)
 
-### 🚀 阶段五：高级功能与质量保证 (QA)
+**目标**: 构建符合澳洲标准的“现代测试金字塔”，涵盖逻辑验证与链路集成。
 
-**目标**: 文件处理与测试。
-
-- **[ ] 任务 5.1 (文件上传)**: 实现简历上传与存储。
-- **[ ] 任务 5.2 (单元测试)**: xUnit + Moq 测试 Service 逻辑。
-- **[ ] 任务 5.3 (集成测试)**: WebApplicationFactory 测试 API 端点 (验证 200-Only 策略是否生效)。
+- **[ ] 任务 6.1 (单元测试 Unit Tests)**:
+  - **范围**: `Application` 层 (重点测试 `EmployeeService`)。
+  - **工具**: `xUnit`, `Moq`, `FluentAssertions`。
+  - **内容**: 模拟 Repository 返回，验证 Service 逻辑（如分页计算、异常抛出）。
+- **[ ] 任务 6.2 (集成测试 Integration Tests)**:
+  - **范围**: `WebAPI` 层 (Controller -> DB)。
+  - **工具**: `WebApplicationFactory`, `Testcontainers` (真实 PostgreSQL 容器)。
+  - **内容**:
+    - 验证 **Auth**: 未登录访问受保护接口应返回 401。
+    - 验证 **Error**: 访问不存在 ID 应返回 404 (ProblemDetails)。
+    - 验证 **Flow**: Create -> Get -> Delete 完整流程。
