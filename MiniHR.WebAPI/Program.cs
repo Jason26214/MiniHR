@@ -2,6 +2,7 @@ using Autofac;
 using Autofac.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 using MiniHR.Infrastructure.Persistence;
+using MiniHR.WebAPI.Middleware;
 using MiniHR.WebAPI.Modules;
 
 namespace MiniHR.WebAPI
@@ -52,7 +53,8 @@ namespace MiniHR.WebAPI
             /* app */
             var app = builder.Build();
 
-            // Configure the HTTP request pipeline.
+            app.UseMiddleware<ExceptionMiddleware>();
+
             if (app.Environment.IsDevelopment())
             {
                 app.UseSwagger();

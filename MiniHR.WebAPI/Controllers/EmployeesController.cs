@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using MiniHR.Application.DTOs;
 using MiniHR.Application.Interfaces;
+using MiniHR.WebAPI.Models;
 
 namespace MiniHR.WebAPI.Controllers
 {
@@ -9,43 +10,80 @@ namespace MiniHR.WebAPI.Controllers
     public class EmployeesController : ControllerBase
     {
         private readonly IEmployeeService _employeeService;
+
         public EmployeesController(IEmployeeService employeeService)
         {
             _employeeService = employeeService;
         }
 
-        // GET /api/employees/{id}
-        [HttpGet("{id:guid}")]
-        [ActionName(nameof(GetByIdAsync))]
-        public async Task<IActionResult> GetByIdAsync(Guid id)
-        {
-            var employee = await _employeeService.GetByIdAsync(id);
-            if (employee == null)
-            {
-                return NotFound();
-            }
-            return Ok(employee);
-        }
-
         // GET /api/employees
         [HttpGet]
-        public async Task<IActionResult> GetAllAsync()
+        public async Task<ApiResult<IEnumerable<EmployeeDto>>> GetAllAsync()
         {
             var employees = await _employeeService.GetAllAsync();
-            return Ok(employees);
+
+            return new ApiResult<IEnumerable<EmployeeDto>>
+            {
+                Success = true,
+                Code = 200,
+                Data = employees,
+                Message = "Success"
+            };
+        }
+
+        // GET /api/employees/{id}
+        [HttpGet("{id:guid}")]
+        public async Task<ApiResult<EmployeeDto>> GetByIdAsync(Guid id)
+        {
+            var employee = await _employeeService.GetByIdAsync(id);
+
+            if (employee == null)
+            {
+                return new ApiResult<EmployeeDto>
+                {
+                    Success = false,
+                    Code = 404,
+                    Error = "Employee not found"
+                };
+            }
+
+            return new ApiResult<EmployeeDto>
+            {
+                Success = true,
+                Code = 200,
+                Data = employee
+            };
         }
 
         // POST /api/employees
         [HttpPost]
-        public async Task<IActionResult> CreateAsync([FromBody] CreateEmployeeDto createEmployeeDto)
+        public async Task<ApiResult<EmployeeDto>> CreateAsync([FromBody] CreateEmployeeDto createEmployeeDto)
         {
+            if (!ModelState.IsValid)
+            {
+                var errors = ModelState.Values
+                    .SelectMany(v => v.Errors)
+                    .Select(e => e.ErrorMessage)
+                    .ToList();
+
+                return new ApiResult<EmployeeDto>
+                {
+                    Success = false,
+                    Code = 400,
+                    Error = errors,
+                    Message = "Validation failed"
+                };
+            }
+
             var newEmployee = await _employeeService.CreateEmployeeAsync(createEmployeeDto);
 
-            return CreatedAtAction(
-                actionName: nameof(GetByIdAsync),
-                routeValues: new { id = newEmployee.Id },
-                value: newEmployee
-            );
+            return new ApiResult<EmployeeDto>
+            {
+                Success = true,
+                Code = 201,
+                Data = newEmployee,
+                Message = "Employee created successfully"
+            };
         }
     }
 }
