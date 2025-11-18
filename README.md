@@ -1,12 +1,6 @@
-﻿# 📘 Mini HR API - 技术设计与实施计划 (v3.3)
+﻿# 📘 Mini HR API - 技术设计与实施计划 (v3.4)
 
-https://github.com/Jason26214/MiniHR.git
-
-项目代号: "Phoenix"
-
-版本: 3.3
-
-日期: 2025-11-15
+**版本说明**: v3.4 (导师修正版)。此版本废除了 TDD 3.7 (自动过滤器)，确立了“手动控制响应”和“HTTP 200 策略”的核心原则，旨在构建一个逻辑清晰、高度可控的 API 系统。
 
 ## 第一部分：技术设计文档 (TDD - Technical Design Document)
 
@@ -35,9 +29,10 @@ https://github.com/Jason26214/MiniHR.git
 ```
 [层级]            [项目名 (Project)]         [职责 (Responsibilities)]
 -------------------------------------------------------------------------------------------------
-  API /           MiniHR.WebAPI              - Controllers (控制器), Middleware (中间件), Filters (过滤器)
+  API /           MiniHR.WebAPI              - Controllers (控制器), Middleware (中间件)
 Presentation                               - DTOs (数据传输对象), API Model Validation (模型验证)
  (展示层)                                  - Program.cs (DI容器配置, 管道配置)
+                                           - **Models/ApiResult.cs (统一响应模型)**
     |
     v
 Application       MiniHR.Application         - Application Services (应用服务, 业务逻辑)
@@ -57,193 +52,184 @@ Infrastructure    MiniHR.Infrastructure      - EF Core DbContext (数据库上�
 -------------------------------------------------------------------------------------------------
 ```
 
-### 3.0 横切关注点 (Cross-Cutting Concerns)
+### 3.0 横切关注点 (Cross-Cutting Concerns) - (核心架构决策)
 
-通过 ASP.NET Core **管道 (Pipeline)** 统一处理的全局功能。
+ASP.NET Core 管道将用于处理**意外**的全局异常和基础设施（如 CORS/Auth），但**业务响应的包装**将**手动**在 Controller 中完成。
 
-1. **CORS (Cross-Origin Resource Sharing)**:
-   - **实现**: `app.UseCors()` (Middleware)。
-   - **目标**: 配置策略以允许指定的外部源（例如 `http://localhost:3000`）访问 API，是 Web API 与前端（React/Vue/Vite）集成的必备配置。
-2. **统一响应模型 (Unified Response Model)**:
-   - **实现**: 定义 `ApiResponse<T>` 类作为所有响应的“数据信封”。
-   - **目标**: 无论成功或失败，前端始终能解析同一个 JSON 结构，增强 API 的健壮性。
-3. **全局异常处理 (Global Exception Handling)**:
-   - **实现**: 自定义 `ExceptionMiddleware` 或使用 .NET 8 `IExceptionHandler` 接口。
-   - **目标**: 捕获所有未处理异常，将其格式化为 `ApiResponse` (e.g., `{ "success": false, "error": ... }`)，绝不暴露堆栈信息。
-4. **成功响应包装 (Success Response Wrapping)**:
-   - **实现**: 自定义 `ResultFilter` (IResultFilter / IActionFilter)。
-   - **目标**: 自动将控制器返回的 `IActionResult` (如 `Ok(data)`) 包装成 `ApiResponse` (e.g., `{ "success": true, "data": ... }`)。
-5. **Authentication (认证)**:
-   - **实现**: `app.UseAuthentication()` (Middleware)。配置 `JwtBearer` 方案，验证 HTTP Header 中的 Token 并构建用户身份。
-6. **Authorization (授权)**:
-   - **实现**: `app.UseAuthorization()` (Middleware)。检查 `[Authorize]` 属性及已定义的 `Policy` 策略。
-7. **Logging (日志)**:
-   - **实现**: .NET 内置日志框架或集成 Serilog 中间件。
+**HTTP 响应黄金准则 (200-Only Strategy):**
+
+1. 所有 API 端点在**业务层面**（包括业务失败、参数错误、系统异常）**永远**返回 **HTTP 200 OK**。
+2. 客户端**永远**不依赖 HTTP 状态码判断业务结果。
+3. 客户端**必须**解析 JSON 响应体中的 `Success` (布尔值) 和 `Code` (数字) 字段。
+
+#### 3.1 统一响应模型 (Unified Response Model) (TDD 3.5)
+
+- **实现**: 定义 `ApiResult<T>` 类作为**所有**响应的“数据信封”。
+
+- **目标**: 无论成功或失败，前端始终能解析同一个 JSON 结构。
+
+- **结构定义** (`MiniHR.WebAPI/Models/ApiResult.cs`):
+
+  ```
+  public class ApiResult<T>
+  {
+      // 业务是否成功
+      public bool Success { get; set; }
+  
+      // 自定义业务状态码 (复用 HTTP 语义: 200, 201, 400, 401, 403, 404, 500)
+      public int Code { get; set; }
+  
+      // 成功时的数据
+      public T? Data { get; set; }
+  
+      // 失败时的错误信息
+      public object? Error { get; set; }
+  
+      // (可选) 调试或提示消息
+      public string? Message { get; set; }
+  }
+  ```
+
+#### 3.2 全局异常处理 (Global Exception Handling) (TDD 3.6)
+
+- **实现**: 自定义 `ExceptionMiddleware`。
+- **目标**: 仅用于捕获**未处理的、意外的**异常（例如 `NullReferenceException`、数据库连接超时等）。这是系统的最后一道防线。
+- **行为**:
+  1. `try...catch` 捕获管道中的异常。
+  2. 记录 **Error** 级别日志（包含堆栈信息）。
+  3. **手动**构建并返回一个 `ApiResult<object>`：
+     - `Success = false`
+     - `Code = 500`
+     - `Error = "服务器内部错误，请联系管理员"` (隐藏堆栈细节)
+  4. **关键**: 将 Response 的 HTTP StatusCode 设为 **200**。
+
+#### 3.3 业务逻辑验证 (Business Logic Validation)
+
+- **实现**: **在 Controller 方法内部**手动实现。
+- **目标**: 处理**已知的、预期的**业务分支（例如 参数校验失败、资源未找到、权限不足）。
+- **行为**:
+  1. Controller 检查 `ModelState.IsValid`。如果不通过，返回 `ApiResult` (`Code=400`, `Success=false`, `Error=校验错误详情`)。
+  2. Controller 调用 Service。如果 Service 返回 null (未找到)，返回 `ApiResult` (`Code=404`, `Success=false`)。
+  3. **关键**: 这些“错误”在 HTTP 层面依然是 **200 OK**。
+
+#### 3.4 CORS (Cross-Origin Resource Sharing)
+
+- **实现**: `app.UseCors()`。
+- **策略**: "AllowSpecificOrigin"。允许前端开发服务器 (`http://localhost:3000`) 访问，并显式允许 `Authorization` 和 `Content-Type` 头部。
+
+#### 3.5 Authentication & Authorization
+
+- **实现**: `app.UseAuthentication()` + `app.UseAuthorization()`。
+- **行为**: 401 (未登录) 和 403 (无权限) 通常由框架在中间件层直接返回。
+  - *注*: 为了保持 200-Only 策略的绝对统一，高级做法是自定义 `JwtBearerEvents` 来拦截 401/403 并重写为 200 OK 的 `ApiResult`。在本项目初期，我们可以暂且容忍 401/403 作为 HTTP 状态码存在，或者在后续进阶任务中统一处理。
 
 ### 4.0 数据库设计 (Database Design - PostgreSQL)
 
-采用 **EF Core Code-First** 模式。C# 实体类是唯一的数据结构真相来源。
+采用 **EF Core Code-First** 模式。
 
-#### 4.1 Table: `Users` (系统用户)
+#### 4.1 Table: `Users`
 
 - `Id` (Guid, PK)
 - `Username` (string, Unique Index)
 - `PasswordHash` (string)
 - `Role` (string) - (e.g., "Admin", "User")
 
-#### 4.2 Table: `Employees` (员工档案)
+#### 4.2 Table: `Employees`
 
 - `Id` (Guid, PK)
 - `FirstName` (string)
 - `LastName` (string)
 - `Email` (string, Unique Index)
 - `Position` (string)
-- `Salary` (**decimal(18, 2)**) - 高精度十进制存储薪资。
-- `HireDate` (**DateTimeOffset**) - 带时区的时间戳。
-- `IsDeleted` (bool) - 用于实现软删除 (Soft Delete)。
+- `Salary` (**decimal(18, 2)**)
+- `HireDate` (**DateTimeOffset**)
+- `IsDeleted` (bool) - 软删除
 
-#### 4.3 Table: `Resumes` (简历)
+#### 4.3 Table: `Resumes`
 
 - `Id` (Guid, PK)
 - `EmployeeId` (Guid, FK -> Employees.Id)
 - `OriginalFileName` (string)
-- `StoredFilePath` (string) - 存储在物理磁盘或 Blob 存储上的路径。
-- `ParsedContent` (string, Nullable) - 存储 AI 解析后的文本数据。
+- `StoredFilePath` (string) - 物理路径
+- `ParsedContent` (string, Nullable) - AI 解析文本
 - `UploadedAt` (DateTimeOffset)
 
 ### 5.0 API 端点定义 (Endpoint Definitions)
 
-- `POST /api/auth/register` (Public)
-- `POST /api/auth/login` (Public)
-- `GET /api/employees` (Auth: Admin)
-- `GET /api/employees/{id}` (Auth: Admin or Self)
-- `POST /api/employees` (Auth: Admin)
-- `PUT /api/employees/{id}` (Auth: Admin)
-- `DELETE /api/employees/{id}` (Auth: Admin)
-- `POST /api/employees/{id}/resumes` (Auth: Admin or Self) - 上传简历
-- `GET /api/employees/{id}/resumes` (Auth: Admin or Self) - 查看简历信息
+所有端点 (除了可能的 401/403) **永远**返回 **HTTP 200 OK**。
+
+- `POST /api/auth/register` -> `ApiResult<object>`
+- `POST /api/auth/login` -> `ApiResult<string>` (Data 为 Token)
+- `GET /api/employees` -> `ApiResult<IEnumerable<EmployeeDto>>`
+- `GET /api/employees/{id}` -> `ApiResult<EmployeeDto>`
+- `POST /api/employees` -> `ApiResult<EmployeeDto>` (Code: 201)
+- `PUT /api/employees/{id}` -> `ApiResult<EmployeeDto>`
+- `DELETE /api/employees/{id}` -> `ApiResult<object>` (Code: 204)
+- `POST /api/employees/{id}/resumes` -> `ApiResult<ResumeDto>`
 
 ### 6.0 关键技术栈 (Tech Stack Checklist)
 
 - [ ] **Framework**: .NET 8
 - [ ] **Web API**: ASP.NET Core Controllers
-- [ ] **API Filters**: ASP.NET Core Filters (用于响应包装)
 - [ ] **Database**: PostgreSQL 16
 - [ ] **ORM**: Entity Framework Core (EF Core) 8
-- [ ] **Dependency Injection**: **Autofac** (用于高级模块化注册) + .NET 内置 DI
+- [ ] **Dependency Injection**: **Autofac**
 - [ ] **Authentication**: JWT (Bearer Token)
-- [ ] **Authorization**: Policy-Based (基于策略)
+- [ ] **Authorization**: Policy-Based
 - [ ] **Mapping**: **AutoMapper**
-- [ ] **Unit Testing**: **xUnit** (测试框架) + **Moq** (模拟框架)
-- [ ] **Integration Testing**: **WebApplicationFactory**
-- [ ] **Containerization**: **Docker** (用于开发环境数据库)
+- [ ] **Testing**: **xUnit** + **Moq** + **WebApplicationFactory**
 
 ## 第二部分：项目实施计划 (Project Implementation Plan)
 
-### 🏁 阶段一：项目骨架 (Project Skeleton)
+### 🏁 阶段一：项目骨架 (Project Skeleton) - [已完成]
 
 **目标**: 搭建符合 Clean Architecture 的项目结构，配置核心 DI 与中间件管道。
 
-- **[ ] 任务 1.1 (环境搭建)**:
-  - 安装 .NET 8 SDK (Win11)。
-  - 安装 Docker Desktop 并运行 PostgreSQL 16 容器。
-  - *验收标准*: 数据库客户端 (DBeaver/pgAdmin) 可成功连接 `localhost:5432`。
-- **[ ] 任务 1.2 (创建解决方案)**:
-  - 创建 `MiniHR` 空白解决方案 (`.sln`)。
-  - 在解决方案中添加 `MiniHR.Domain`, `MiniHR.Application`, `MiniHR.Infrastructure`, `MiniHR.WebAPI` 四个项目。
-  - *验收标准*: 解决方案编译通过，项目类型正确 (Class Library / Web API)。
-- **[ ] 任务 1.3 (配置项目引用)**:
-  - 严格按照 TDD 2.2 节的依赖图配置项目引用。
-  - *验收标准*: `MiniHR.Domain` 项目无任何其他项目引用。
-- **[ ] 任务 1.4 (集成 Autofac)**:
-  - 在 `MiniHR.WebAPI` 中引入 `Autofac.Extensions.DependencyInjection`。
-  - 修改 `Program.cs`，使用 `UseServiceProviderFactory(new AutofacServiceProviderFactory())` 替换默认 DI 容器。
-  - *验收标准*: API 项目能正常启动，Autofac 接管 DI。
-- **[ ] 任务 1.5 (配置 API 管道 - CORS)**:
-  - 在 `MiniHR.WebAPI` 的 `Program.cs` 中配置 CORS 中间件 (`app.UseCors()`)。
-  - 定义一个名为 "AllowSpecificOrigin" 的策略，允许来自 `http://localhost:3000` (未来 React/Vue 开发服务器) 的 `GET`, `POST`, `PUT`, `DELETE` 请求，并允许 `Authorization` 和 `Content-Type` 头部。
-  - *验收标准*: 浏览器的 `OPTIONS` 预检请求能够成功通过。
+- **[x] 任务 1.1 ~ 1.5**: (环境, Solution, 引用, Autofac, CORS) - **已就绪**
 
-### 💾 阶段二：数据持久化 (Data Persistence)
+### 💾 阶段二：数据持久化 (Data Persistence) - [已完成]
 
 **目标**: 掌握 EF Core Code First 完整生命周期。
 
 - **[ ] 任务 2.1 (定义实体)**:
-  - 在 `MiniHR.Domain` 中编写 `User` 和 `Employee` 实体类。
-  - *验收标准*: 实体类使用 `Guid` 作主键, `decimal` 和 `DateTimeOffset` 作为标准类型。
+  - 在 `Domain` 层编写 `User`, `Employee`, `Resume`。
 - **[ ] 任务 2.2 (配置 DbContext)**:
-  - 在 `MiniHR.Infrastructure` 中安装 `Npgsql.EntityFrameworkCore.PostgreSQL`。
-  - 编写 `MiniHrDbContext` 类，继承 `DbContext`。
-  - 在 `OnModelCreating` 中使用 `Fluent API` 配置 `Salary` 的精度 (`HasPrecision(18, 2)`) 和 `Email` 的唯一索引。
+  - 在 `Infra` 层编写 `MiniHrDbContext`，配置 Fluent API (精度, 索引)。
 - **[ ] 任务 2.3 (数据库迁移)**:
-  - 在 `MiniHR.WebAPI` 的 `Program.cs` 中注册 `DbContext` (需从 `IConfiguration` 读取连接字符串)。
-  - 运行 `dotnet ef migrations add InitialCreate --startup-project ../MiniHR.WebAPI`。
-  - 运行 `dotnet ef database update --startup-project ../MiniHR.WebAPI`。
-  - *验收标准*: 在 Postgres 数据库中看到 `Users` 和 `Employees` 表结构。
+  - 注册 DbContext，执行 Migration，生成数据库。
 
 ### 🔌 阶段三：业务逻辑与 API 管道 (Services & Middleware)
 
-**目标**: 实现业务逻辑与 API 层的解耦，构建健壮的请求处理管道。
+**目标**: 实现业务逻辑，构建统一响应体系。
 
 - **[ ] 任务 3.1 (Repository 模式)**:
-  - 在 `MiniHR.Domain` 定义 `IEmployeeRepository` 接口。
-  - 在 `MiniHR.Infrastructure` 实现 `EmployeeRepository`。
-  - 使用 Autofac 配置 `EmployeeRepository` 对 `IEmployeeRepository` 的依赖注入。
+  - 定义并实现 `IEmployeeRepository`。
 - **[ ] 任务 3.2 (DTO 与 AutoMapper)**:
-  - 在 `MiniHR.WebAPI` (或 `Application`) 中定义 `EmployeeDto` 和 `CreateEmployeeDto`。
-  - 在 `MiniHR.Application` 中配置 AutoMapper，实现 `Employee` <=> `DTO` 的映射。
+  - 定义 DTOs，配置 AutoMapper 映射。
 - **[ ] 任务 3.3 (Service 逻辑)**:
-  - 在 `MiniHR.Application` 编写 `EmployeeService`，注入 `IEmployeeRepository` 和 `IMapper`。
-- **[ ] 任务 3.4 (Controller 实现)**:
-  - 在 `MiniHR.WebAPI` 编写 `EmployeesController`，注入 `IEmployeeService`。
-  - 实现 `Get` 和 `Post` 端点。
-- **[ ] 任务 3.5 (统一响应模型 - 定义)**:
-  - 在 `MiniHR.WebAPI` 中定义 `ApiResponse<T>` 和 `ApiError` 类，作为 TDD 3.0 节中定义的标准“数据信封”。
+  - 编写 `EmployeeService`，实现核心业务。
+- **[ ] 任务 3.4 (统一响应模型 - 定义)**:
+  - 在 `MiniHR.WebAPI/Models` 中定义 `ApiResult<T>` 和 `ApiError`。
+- **[ ] 任务 3.5 (Controller 实现)**:
+  - 编写 `EmployeesController`。
+  - **严格遵守**: 所有 Action 必须返回 `ApiResult<T>`。
+  - **手动处理**: `ModelState` 检查、`404` 检查、成功响应包装。
 - **[ ] 任务 3.6 (自定义中间件 - 全局异常)**:
-  - 在 `MiniHR.WebAPI` 中实现 `ExceptionMiddleware` (或 `IExceptionHandler`)。
-  - 在 `Program.cs` 的管道**最顶层**注册它。
-  - *验收标准*: 故意在 Service 抛出异常，API 响应为 `{ "success": false, "data": null, "error": { "code": 500, "message": ... } }`。
-- **[ ] 任务 3.7 (自定义过滤器 - 成功响应)**:
-  - 在 `MiniHR.WebAPI` 中实现一个 `SuccessResponseFilter` (继承 `IResultFilter`)。
-  - 该过滤器拦截 `OkObjectResult` (即 `Ok(data)`)，并将其包装为 `Ok(new ApiResponse<T> { Success = true, Data = data })`。
-  - 在 `Program.cs` 中全局注册此过滤器。
-  - *验收标准*: 成功调用 `GET /api/employees` 返回的 JSON 结构符合 `ApiResponse<T>`。
+  - 实现 `ExceptionMiddleware`。
+  - 捕获意外异常 -> 记录日志 -> 返回 `200 OK` 的 `ApiResult` (Code 500)。
 
 ### 🛡️ 阶段四：安全与鉴权 (Security & Authorization)
 
-**目标**: 保护 API 端点，实现基于角色的访问控制。
+**目标**: 保护 API 端点。
 
-- **[ ] 任务 4.1 (密码哈希)**:
-  - 安装 `BCrypt.Net-Next`。
-  - 在 `Infrastructure` 中实现 `AuthService` (含 `Register` 和 `Login` 方法)，确保注册时哈希密码，登录时验证哈希。
-- **[ ] 任务 4.2 (JWT 生成与验证)**:
-  - 在 `Infrastructure` 中实现 JWT Token 生成逻辑 (需从 `IConfiguration` 读取密钥)。
-  - 在 `Program.cs` 中配置 `app.UseAuthentication()` 和 `JwtBearer` 验证。
-- **[ ] 任务 4.3 (Policy 策略)**:
-  - 在 `Program.cs` 中定义 `Authorization` 策略，例如 `Policy("AdminOnly")`，要求 Role Claim 必须为 "Admin"。
-  - *验收标准*: `[Authorize(Policy = "AdminOnly")]` 应用于 `GET /api/employees`，非 Admin Token 访问返回 403 Forbidden。
+- **[ ] 任务 4.1 (密码哈希)**: `BCrypt.Net` 实现。
+- **[ ] 任务 4.2 (JWT)**: Token 生成与验证。
+- **[ ] 任务 4.3 (Policy)**: 配置 "AdminOnly" 策略。
 
-### 🚀 阶段五：高级功能与质量保证 (Advanced Features & QA)
+### 🚀 阶段五：高级功能与质量保证 (QA)
 
-**目标**: 掌握文件处理和多维度测试，为 AI 项目集成做准备。
+**目标**: 文件处理与测试。
 
-- **[ ] 任务 5.1 (文件上传)**:
-  - 在 `Infrastructure` 中实现 `FileService` (使用 `System.IO` 将 `IFormFile` 保存到本地磁盘)。
-  - 在 `ResumesController` 中实现文件上传端点。
-  - *验收标准*: 上传 PDF 成功，`Resumes` 表中记录了正确的文件路径。
-- **[ ] 任务 5.2 (单元测试 - xUnit & Moq)**:
-  - 创建 `MiniHR.Tests.Unit` (xUnit) 项目。
-  - 安装 `Moq`。
-  - **编写第一个测试**:
-    - *目标*: `EmployeeService.CreateEmployee`。
-    - *Arrange*: `Mock<IEmployeeRepository>`，模拟 `GetByEmailAsync` 返回 `null`。
-    - *Act*: 调用 `service.CreateEmployee(...)`。
-    - *Assert*: 验证 `repository.AddAsync` **被调用了恰好一次** (`Verify(..., Times.Once)`)。
-- **[ ] 任务 5.3 (集成测试 - WebApplicationFactory)**:
-  - 创建 `MiniHR.Tests.Integration` (xUnit) 项目。
-  - 安装 `Microsoft.AspNetCore.Mvc.Testing`。
-  - **编写第一个测试**:
-    - *目标*: `POST /api/employees` 端点。
-    - *Arrange*: 创建 `WebApplicationFactory` 和 `HttpClient`。创建一个 `CreateEmployeeDto`。
-    - *Act*: `await client.PostAsJsonAsync("/api/employees", dto)`。
-    - *Assert*: 验证 HTTP 响应状态码为 `201 Created`，并从测试数据库中确认该员工已被创建。
+- **[ ] 任务 5.1 (文件上传)**: 实现简历上传与存储。
+- **[ ] 任务 5.2 (单元测试)**: xUnit + Moq 测试 Service 逻辑。
+- **[ ] 任务 5.3 (集成测试)**: WebApplicationFactory 测试 API 端点 (验证 200-Only 策略是否生效)。

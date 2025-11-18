@@ -9,6 +9,9 @@ namespace MiniHR.Domain.Interfaces
 {
     public interface IEmployeeRepository
     {
+        // SaveChangesAsync
+        Task<int> SaveChangesAsync();
+
         // Get an employee by id
         Task<Employee?> GetByIdAsync(Guid id);
 

@@ -14,6 +14,11 @@ namespace MiniHR.Infrastructure.Repositories
             _context = context;
         }
 
+        public async Task<int> SaveChangesAsync()
+        {
+            return await _context.SaveChangesAsync();
+        }
+
         public async Task<Employee?> GetByIdAsync(Guid id)
         {
             return await _context.Employees
@@ -37,5 +42,7 @@ namespace MiniHR.Infrastructure.Repositories
         {
             await _context.Employees.AddAsync(employee);
         }
+
+        
     }
 }

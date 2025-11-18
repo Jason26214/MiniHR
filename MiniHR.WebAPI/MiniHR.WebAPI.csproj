@@ -17,10 +17,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Controllers\" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\MiniHR.Application\MiniHR.Application.csproj" />
     <ProjectReference Include="..\MiniHR.Infrastructure\MiniHR.Infrastructure.csproj" />
   </ItemGroup>
