@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using MiniHR.Application.DTOs;
 using MiniHR.Application.Interfaces;
-using MiniHR.WebAPI.Models;
+using MiniHR.Application.POJOs.DTOs;
+using MiniHR.Application.POJOs.VOs;
 
 namespace MiniHR.WebAPI.Controllers
 {
@@ -18,7 +18,7 @@ namespace MiniHR.WebAPI.Controllers
 
         // GET /api/employees
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<EmployeeDto>>> GetAllAsync()
+        public async Task<ActionResult<IEnumerable<EmployeeVO>>> GetAllAsync()
         {
             var employees = await _employeeService.GetAllAsync();
 
@@ -27,7 +27,7 @@ namespace MiniHR.WebAPI.Controllers
 
         // GET /api/employees/{id}
         [HttpGet("{id:guid}")]
-        public async Task<ActionResult<EmployeeDto>> GetByIdAsync(Guid id)
+        public async Task<ActionResult<EmployeeVO>> GetByIdAsync(Guid id)
         {
             var employee = await _employeeService.GetByIdAsync(id);
 
@@ -45,14 +45,14 @@ namespace MiniHR.WebAPI.Controllers
 
         // POST /api/employees
         [HttpPost]
-        public async Task<ActionResult<EmployeeDto>> CreateAsync([FromBody] CreateEmployeeDto createEmployeeDto)
+        public async Task<ActionResult<EmployeeVO>> CreateAsync([FromBody] EmployeeDTO createEmployeeDto)
         {
             if (!ModelState.IsValid)
             {
                 return ValidationProblem(ModelState);
             }
 
-            EmployeeDto newEmployee = await _employeeService.CreateEmployeeAsync(createEmployeeDto);
+            EmployeeVO newEmployee = await _employeeService.CreateEmployeeAsync(createEmployeeDto);
 
             return CreatedAtAction(
                 nameof(GetByIdAsync),

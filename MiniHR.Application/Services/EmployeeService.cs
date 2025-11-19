@@ -1,5 +1,6 @@
 ﻿using AutoMapper;
-using MiniHR.Application.DTOs;
+using MiniHR.Application.POJOs.DTOs;
+using MiniHR.Application.POJOs.VOs;
 using MiniHR.Application.Interfaces;
 using MiniHR.Domain.Entities;
 using MiniHR.Domain.Interfaces;
@@ -19,30 +20,30 @@ namespace MiniHR.Application.Services
 
 
         // GET /api/employees/{id}
-        public async Task<EmployeeDto?> GetByIdAsync(Guid id)
+        public async Task<EmployeeVO?> GetByIdAsync(Guid id)
         {
             Employee? employee = await _employeeRepository.GetByIdAsync(id);
             if (employee == null)
             {
                 return null;
             }
-            return _mapper.Map<EmployeeDto>(employee);
+            return _mapper.Map<EmployeeVO>(employee);
         }
 
         // GET /api/employees
-        public async Task<IEnumerable<EmployeeDto>> GetAllAsync()
+        public async Task<IEnumerable<EmployeeVO>> GetAllAsync()
         {
             IEnumerable<Employee> employees = await _employeeRepository.GetAllAsync();
-            return _mapper.Map<IEnumerable<EmployeeDto>>(employees);
+            return _mapper.Map<IEnumerable<EmployeeVO>>(employees);
         }
 
         // POST /api/employees
-        public async Task<EmployeeDto> CreateEmployeeAsync(CreateEmployeeDto createEmployeeDto)
+        public async Task<EmployeeVO> CreateEmployeeAsync(EmployeeDTO createEmployeeDto)
         {
             Employee employeeEntity = _mapper.Map<Employee>(createEmployeeDto);
             await _employeeRepository.AddAsync(employeeEntity);
             await _employeeRepository.SaveChangesAsync();
-            return _mapper.Map<EmployeeDto>(employeeEntity);
+            return _mapper.Map<EmployeeVO>(employeeEntity);
         }
 
 

@@ -1,5 +1,6 @@
 ﻿using AutoMapper;
-using MiniHR.Application.DTOs;
+using MiniHR.Application.POJOs.DTOs;
+using MiniHR.Application.POJOs.VOs;
 using MiniHR.Domain.Entities;
 
 namespace MiniHR.Application.Profiles
@@ -8,10 +9,10 @@ namespace MiniHR.Application.Profiles
     {
         public MappingProfile()
         {
-            // Read data
-            CreateMap<Employee, EmployeeDto>();
-            // Create data
-            CreateMap<CreateEmployeeDto, Employee>();
+            // Read data -> VO
+            CreateMap<Employee, EmployeeVO>();
+            // Create data -> Entity
+            CreateMap<EmployeeDTO, Employee>();
         }
     }
 }

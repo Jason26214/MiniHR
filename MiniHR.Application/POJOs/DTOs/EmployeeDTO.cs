@@ -1,18 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System;
 
-namespace MiniHR.Application.DTOs
+namespace MiniHR.Application.POJOs.DTOs
 {
-    public class EmployeeDto
+    public class EmployeeDTO
     {
-        public Guid Id { get; set; }
         public string FirstName { get; set; } = string.Empty;
         public string LastName { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
         public string Position { get; set; } = string.Empty;
+        public decimal Salary { get; set; }
         public DateTimeOffset HireDate { get; set; }
     }
 }

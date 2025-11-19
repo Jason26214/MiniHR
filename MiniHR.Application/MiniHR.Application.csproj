@@ -14,4 +14,8 @@
     <ProjectReference Include="..\MiniHR.Domain\MiniHR.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="DTOs\" />
+  </ItemGroup>
+
 </Project>
