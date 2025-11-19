@@ -18,72 +18,47 @@ namespace MiniHR.WebAPI.Controllers
 
         // GET /api/employees
         [HttpGet]
-        public async Task<ApiResult<IEnumerable<EmployeeDto>>> GetAllAsync()
+        public async Task<ActionResult<IEnumerable<EmployeeDto>>> GetAllAsync()
         {
             var employees = await _employeeService.GetAllAsync();
 
-            return new ApiResult<IEnumerable<EmployeeDto>>
-            {
-                Success = true,
-                Code = 200,
-                Data = employees,
-                Message = "Success"
-            };
+            return Ok(employees);
         }
 
         // GET /api/employees/{id}
         [HttpGet("{id:guid}")]
-        public async Task<ApiResult<EmployeeDto>> GetByIdAsync(Guid id)
+        public async Task<ActionResult<EmployeeDto>> GetByIdAsync(Guid id)
         {
             var employee = await _employeeService.GetByIdAsync(id);
 
             if (employee == null)
             {
-                return new ApiResult<EmployeeDto>
-                {
-                    Success = false,
-                    Code = 404,
-                    Error = "Employee not found"
-                };
+                return Problem(
+                    statusCode: StatusCodes.Status404NotFound,
+                    title: "Not Found",
+                    detail: $"Employee with ID {id} was not found."
+                    );
             }
 
-            return new ApiResult<EmployeeDto>
-            {
-                Success = true,
-                Code = 200,
-                Data = employee
-            };
+            return Ok(employee);
         }
 
         // POST /api/employees
         [HttpPost]
-        public async Task<ApiResult<EmployeeDto>> CreateAsync([FromBody] CreateEmployeeDto createEmployeeDto)
+        public async Task<ActionResult<EmployeeDto>> CreateAsync([FromBody] CreateEmployeeDto createEmployeeDto)
         {
             if (!ModelState.IsValid)
             {
-                var errors = ModelState.Values
-                    .SelectMany(v => v.Errors)
-                    .Select(e => e.ErrorMessage)
-                    .ToList();
-
-                return new ApiResult<EmployeeDto>
-                {
-                    Success = false,
-                    Code = 400,
-                    Error = errors,
-                    Message = "Validation failed"
-                };
+                return ValidationProblem(ModelState);
             }
 
-            var newEmployee = await _employeeService.CreateEmployeeAsync(createEmployeeDto);
+            EmployeeDto newEmployee = await _employeeService.CreateEmployeeAsync(createEmployeeDto);
 
-            return new ApiResult<EmployeeDto>
-            {
-                Success = true,
-                Code = 201,
-                Data = newEmployee,
-                Message = "Employee created successfully"
-            };
+            return CreatedAtAction(
+                nameof(GetByIdAsync),
+                new { id = newEmployee.Id },
+                newEmployee
+            );
         }
     }
 }

@@ -138,73 +138,83 @@ Infrastructure    MiniHR.Infrastructure      - EF Core DbContext (数据库上�
 
 ## 第二部分：项目实施计划 (Project Implementation Plan)
 
-### 🏁 阶段一 & 💾 阶段二 - [已完成]
+### 🏁 阶段一：项目骨架 (Project Skeleton) - [已完成]
 
-(项目骨架、数据库实体、EF Core 配置、Autofac 基础配置均已就绪)
+**目标**: 搭建符合 Clean Architecture 的项目结构，配置核心 DI 与中间件管道。
 
-### 🔄 阶段三：RESTful 重构与基础设施 (Standardization & Infra)
+- **[x] 任务 1.1 ~ 1.5**: (环境, Solution, 引用, Autofac, CORS) - **已就绪**
 
-**目标**: 搭建符合澳洲标准的错误处理和日志系统，清理旧代码。
+### 💾 阶段二：数据持久化 (Data Persistence) - [已完成]
+
+**目标**: 掌握 EF Core Code First 完整生命周期。
+
+- **[x] 任务 2.1 ~ 2.3**: (实体定义, DbContext, Migration, Database Update) - **已就绪**
+
+### 🔄 阶段三：RESTful 重构与基础设施 (Standardization & Infra) - [当前阶段]
+
+**目标**: 引入生产级日志，移除自定义封装，回归标准 HTTP 响应 (ProblemDetails)。
 
 - **[ ] 任务 3.1 (日志系统)**:
-  - 引入 `Serilog.AspNetCore`。
-  - 在 `Program.cs` 中配置 Serilog (Console + Enrichers)。
-- **[ ] 任务 3.2 (错误处理)**:
-  - 删除 `ApiResult.cs` 和旧中间件。
-  - 注册 `AddProblemDetails()`。
-  - 实现 `GlobalExceptionHandler` 并在管道中注册。
-- **[ ] 任务 3.3 (Controller 初步清洗)**:
-  - 将 `EmployeesController` 的返回值改为 `IActionResult`，移除手动 `ApiResult` 包装，暂时保持无 Auth 状态。
+  - **安装包**: 在 `WebAPI` 安装 `Serilog.AspNetCore`, `Serilog.Sinks.Console`, `Serilog.Sinks.File`。
+  - **配置**: 在 `Program.cs` 中配置 Serilog，接管 .NET 内置日志。
+  - *验收*: 控制台输出带有颜色的结构化日志。
+- **[ ] 任务 3.2 (错误处理重构)**:
+  - **删除**: 移除 `ApiResult.cs` 类和 `ExceptionMiddleware`。
+  - **实现**: 创建 `GlobalExceptionHandler` (实现 `IExceptionHandler`)。
+  - **配置**: 在 `Program.cs` 注册 `AddProblemDetails()` 和 `UseExceptionHandler()`。
+  - *验收*: 抛出异常时，API 返回 RFC 7807 格式的 JSON (`type`, `title`, `status`, `detail`)。
+- **[ ] 任务 3.3 (Controller 清洗)**:
+  - **重构**: 修改 `EmployeesController`。
+  - **动作**:
+    - 返回类型改为 `IActionResult` 或 `ActionResult<T>`。
+    - 移除所有 `ApiResult` 包装。
+    - 成功返回 `Ok(data)`, `CreatedAtAction(...)`。
+    - 失败返回 `BadRequest()`, `NotFound()`。
 
 ### 🛡️ 阶段四：认证与授权 (Auth & Security) - [核心重点]
 
 **目标**: 实现完整的用户注册登录流程，并配置基于策略的权限控制。
 
-- **[ ] 任务 4.1 (安全基础)**:
-  - 引入 `BCrypt.Net-Next`。
-  - 在 `Infrastructure` 层实现 `PasswordHasher`。
-- **[ ] 任务 4.2 (JWT 服务)**:
-  - 在 `appsettings.json` 配置 JWT Settings。
-  - 在 `Infrastructure` 层实现 `JwtTokenGenerator`。
-- **[ ] 任务 4.3 (Auth API)**:
-  - 创建 `AuthController`，实现 `POST /register` 和 `POST /login`。
-- **[ ] 任务 4.4 (配置鉴权管道)**:
+- **[ ] 任务 4.1 (安全基础设施)**:
+  - **安装包 (Infra)**: `BCrypt.Net-Next`。
+  - **安装包 (WebAPI)**: `Microsoft.AspNetCore.Authentication.JwtBearer` (**关键修复**)。
+  - **实现**: 在 `Infrastructure` 层实现 `PasswordHasher` 和 `JwtTokenGenerator` (密钥从配置读取)。
+- **[ ] 任务 4.2 (Auth 业务逻辑)**:
+  - 在 `Application` 层实现 `AuthService` (Register/Login 逻辑)。
+  - 创建 `AuthController`，暴露 `POST /register` 和 `POST /login` 端点。
+- **[ ] 任务 4.3 (配置鉴权管道)**:
   - 在 `Program.cs` 配置 `AddAuthentication().AddJwtBearer(...)`。
-  - **关键**: 确保 `app.UseAuthentication()` 必须在 `app.UseAuthorization()` **之前**调用。
-- **[ ] 任务 4.5 (配置 Policy 授权)**:
-  - 使用 `AddAuthorization` 定义策略 `"AdminOnly"`。
-  - 在 Controller 上应用 `[Authorize(Policy = "AdminOnly")]`。
-- **[ ] 任务 4.6 (Swagger 支持)**:
-  - 配置 Swagger 以支持 JWT Bearer Token 输入（添加 `AddSecurityDefinition` 和 `AddSecurityRequirement`），显示“小锁”图标。
-- **[ ] 任务 4.7 (CORS 检查)**:
-  - 检查 CORS 策略，显式允许 `Authorization` 标头，防止跨域被拦截。
+  - **关键顺序**: 确保 `app.UseAuthentication()` 在 `app.UseAuthorization()` 之前。
+- **[ ] 任务 4.4 (配置 Policy 授权)**:
+  - 使用 `AddAuthorization` 定义策略 `"AdminOnly"` (RequireRole "Admin")。
+  - 在 `EmployeesController` 的写操作 (POST/PUT/DELETE) 上应用 `[Authorize(Policy = "AdminOnly")]`。
+- **[ ] 任务 4.5 (Swagger 鉴权支持)**:
+  - 配置 `AddSwaggerGen` 以支持 JWT Bearer 输入 (`OpenApiSecurityScheme`)。
+  - *验收*: Swagger UI 出现“小锁”图标，输入 Token 后请求自动带上 Header。
 
 ### 🚀 阶段五：API 补全与业务逻辑 (Business Logic & Pagination)
 
-**目标**: 按照逻辑顺序完成剩余 API 开发，并加入分页。
+**目标**: 按照逻辑顺序完成剩余 API 开发，并加入分页防止 OOM。
 
 - **[ ] 任务 5.1 (分页基础设施)**:
-  - 定义 `PagedResult<T>` 和 `PaginationParams`。
+  - 定义 `PagedResult<T>` (包含 Items, PageNumber, TotalPages 等)。
   - 为 `IQueryable` 编写 `ToPagedListAsync` 扩展方法。
 - **[ ] 任务 5.2 (完善 Employee API)**:
-  - 修改 `GetById` 和 `GetAll` (加入分页)。
-  - 实现 `Update` (PUT) 和 `Delete` (DELETE)。
+  - 修改 `GetById` (处理 404) 和 `GetAll` (加入分页参数 `[FromQuery]`).
+  - 实现 `Update` (PUT): 完整更新，返回 204 No Content。
+  - 实现 `Delete` (DELETE): 软删除，返回 204 No Content。
 - **[ ] 任务 5.3 (Resume API 开发)**:
-  - 实现 `IFileService`。
+  - 实现 `IFileService` (注意 Docker 卷挂载路径)。
   - 实现 `POST /employees/{id}/resumes`: 接收 `IFormFile`，保存文件，写入数据库。
 
 ### ✅ 阶段六：测试与验收 (Quality Assurance)
 
-**目标**: 构建符合澳洲标准的“现代测试金字塔”，涵盖逻辑验证与链路集成。
+**目标**: 构建符合澳洲标准的“现代测试金字塔”。
 
 - **[ ] 任务 6.1 (单元测试 Unit Tests)**:
-  - **范围**: `Application` 层 (重点测试 `EmployeeService`)。
+  - **范围**: `Application` 层 (重点测试 `EmployeeService` 的业务逻辑)。
   - **工具**: `xUnit`, `Moq`, `FluentAssertions`。
-  - **内容**: 模拟 Repository 返回，验证 Service 逻辑（如分页计算、异常抛出）。
 - **[ ] 任务 6.2 (集成测试 Integration Tests)**:
   - **范围**: `WebAPI` 层 (Controller -> DB)。
-  - **工具**: `WebApplicationFactory`, `Testcontainers` (真实 PostgreSQL 容器)。
-  - **内容**:
-    - 验证 **Auth**: 未登录访问受保护接口应返回 401。
-    - 验证 **Error**: 访问不存在 ID 应返回 404 (ProblemDetails)。
-    - 验证 **Flow**: Create -> Get -> Delete 完整流程。
+  - **工具**: `WebApplicationFactory`, `Testcontainers` (PostgreSQL)。
+  - **内容**: 验证 Auth 拦截 (401/403)、错误格式 (ProblemDetails) 和 完整 CRUD 流程。

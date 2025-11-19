@@ -4,8 +4,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MiniHR.Application.Profiles;
 using MiniHR.Infrastructure.Persistence;
-using MiniHR.WebAPI.Middleware;
+using MiniHR.WebAPI.ExceptionHandlers;
 using MiniHR.WebAPI.Modules;
+using Serilog;
 
 namespace MiniHR.WebAPI
 {
@@ -15,38 +16,40 @@ namespace MiniHR.WebAPI
         {
             var builder = WebApplication.CreateBuilder(args);
 
+            // Serilog configuration
+            // 1. Read configuration from appsettings (if any)
+            // 2. Automatically record context information (Enrich)
+            // 3. Output to console (Console)
+            // 4. Output to file (File) - daily rolling, saved in the logs folder
+            builder.Host.UseSerilog((context, configuration) =>
+                configuration.ReadFrom.Configuration(context.Configuration)
+                        .Enrich.FromLogContext()
+                        .WriteTo.Console()
+                        .WriteTo.File("logs/minihr.txt", rollingInterval: RollingInterval.Day));
+
             // setting autofac
-            #region autofac
             builder.Host.UseServiceProviderFactory(new AutofacServiceProviderFactory());
             builder.Host.ConfigureContainer<ContainerBuilder>(containerBuilder =>
             {
                 containerBuilder.RegisterModule(new AutofacModule());
             });
-            #endregion
 
             // CORS
-            #region CORS
             var corsPolicyName = "AllowSpecificOrigin";
             builder.Services.AddCors(options =>
             {
-                options.AddPolicy(name: corsPolicyName,
-                                  policy =>
-                                  {
-                                      policy.WithOrigins("http://localhost:3000")
-                                            .WithMethods("GET", "POST", "PUT", "DELETE")
-                                            .WithHeaders("Authorization", "Content-Type");
-                                  });
+                options.AddPolicy(name: corsPolicyName, policy =>
+                            {
+                                policy.WithOrigins("http://localhost:3000")
+                                    .WithMethods("GET", "POST", "PUT", "DELETE")
+                                    .WithHeaders("Authorization", "Content-Type");
+                            });
             });
-            #endregion
-
-            // Add services to the container.
 
             // DbContext
-            #region DbContext
             var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
             builder.Services.AddDbContext<MiniHrDbContext>(options =>
                 options.UseNpgsql(connectionString));
-            #endregion
 
             // AutoMapper registration
             builder.Services.AddAutoMapper(cfg =>
@@ -55,6 +58,10 @@ namespace MiniHR.WebAPI
             }, typeof(MappingProfile).Assembly);
 
             builder.Services.AddControllers();
+
+            // Register Global Exception Handler
+            builder.Services.AddProblemDetails();
+            builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
             // To disable automatic model state validation
             builder.Services.Configure<ApiBehaviorOptions>(options =>
@@ -65,10 +72,13 @@ namespace MiniHR.WebAPI
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
 
+            /* -------------------------------------- */
             /* app */
             var app = builder.Build();
 
-            app.UseMiddleware<ExceptionMiddleware>();
+            app.UseSerilogRequestLogging();
+
+            app.UseExceptionHandler();
 
             if (app.Environment.IsDevelopment())
             {
