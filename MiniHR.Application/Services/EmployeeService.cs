@@ -1,6 +1,6 @@
 ﻿using AutoMapper;
-using MiniHR.Application.POJOs.DTOs;
-using MiniHR.Application.POJOs.VOs;
+using MiniHR.Application.POCOs.DTOs;
+using MiniHR.Application.POCOs.VOs;
 using MiniHR.Application.Interfaces;
 using MiniHR.Domain.Entities;
 using MiniHR.Domain.Interfaces;

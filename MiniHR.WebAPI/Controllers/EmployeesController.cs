@@ -1,12 +1,14 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using MiniHR.Application.Interfaces;
-using MiniHR.Application.POJOs.DTOs;
-using MiniHR.Application.POJOs.VOs;
+using MiniHR.Application.POCOs.DTOs;
+using MiniHR.Application.POCOs.VOs;
 
 namespace MiniHR.WebAPI.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize] // jwt token is required
     public class EmployeesController : ControllerBase
     {
         private readonly IEmployeeService _employeeService;

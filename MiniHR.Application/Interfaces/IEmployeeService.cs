@@ -1,5 +1,5 @@
-﻿using MiniHR.Application.POJOs.DTOs;
-using MiniHR.Application.POJOs.VOs;
+﻿using MiniHR.Application.POCOs.DTOs;
+using MiniHR.Application.POCOs.VOs;
 
 namespace MiniHR.Application.Interfaces
 {
@@ -13,6 +13,5 @@ namespace MiniHR.Application.Interfaces
 
         // POST /api/employees
         Task<EmployeeVO> CreateEmployeeAsync(EmployeeDTO createEmployeeDto);
-
     }
 }

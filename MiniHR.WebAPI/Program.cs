@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using MiniHR.Application.Profiles;
 using MiniHR.Infrastructure.Persistence;
 using MiniHR.WebAPI.ExceptionHandlers;
+using MiniHR.WebAPI.Extensions;
 using MiniHR.WebAPI.Modules;
 using Serilog;
 
@@ -57,6 +58,9 @@ namespace MiniHR.WebAPI
                 cfg.AddProfile<MappingProfile>();
             }, typeof(MappingProfile).Assembly);
 
+            // WebAPI.Extensions.IdentityServiceExtensions
+            builder.Services.AddIdentityServices(builder.Configuration);
+
             builder.Services.AddControllers();
 
             // Register Global Exception Handler
@@ -70,7 +74,9 @@ namespace MiniHR.WebAPI
             });
 
             builder.Services.AddEndpointsApiExplorer();
-            builder.Services.AddSwaggerGen();
+
+            // MiniHR.WebAPI.Extensions.SwaggerServiceExtensions
+            builder.Services.AddMiniHRSwagger();
 
             /* -------------------------------------- */
             /* app */
@@ -90,6 +96,7 @@ namespace MiniHR.WebAPI
 
             app.UseCors(corsPolicyName);
 
+            app.UseAuthentication();
             app.UseAuthorization();
 
             app.MapControllers();
