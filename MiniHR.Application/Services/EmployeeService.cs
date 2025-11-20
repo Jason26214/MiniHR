@@ -1,8 +1,9 @@
 ﻿using AutoMapper;
+using MiniHR.Application.Interfaces;
 using MiniHR.Application.POCOs.DTOs;
 using MiniHR.Application.POCOs.VOs;
-using MiniHR.Application.Interfaces;
 using MiniHR.Domain.Entities;
+using MiniHR.Domain.Exceptions;
 using MiniHR.Domain.Interfaces;
 
 namespace MiniHR.Application.Services
@@ -17,7 +18,6 @@ namespace MiniHR.Application.Services
             _employeeRepository = employeeRepository;
             _mapper = mapper;
         }
-
 
         // GET /api/employees/{id}
         public async Task<EmployeeVO?> GetByIdAsync(Guid id)
@@ -40,12 +40,18 @@ namespace MiniHR.Application.Services
         // POST /api/employees
         public async Task<EmployeeVO> CreateEmployeeAsync(EmployeeDTO createEmployeeDto)
         {
+            var existing = await _employeeRepository.GetByEmailAsync(createEmployeeDto.Email);
+            if (existing != null)
+            {
+                throw new DuplicateEmailException(createEmployeeDto.Email);
+            }
+
             Employee employeeEntity = _mapper.Map<Employee>(createEmployeeDto);
             await _employeeRepository.AddAsync(employeeEntity);
             await _employeeRepository.SaveChangesAsync();
             return _mapper.Map<EmployeeVO>(employeeEntity);
         }
-
-
     }
+
+
 }

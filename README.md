@@ -119,7 +119,7 @@ Infrastructure    MiniHR.Infrastructure      - EF Core DbContext (数据库上�
 
 - [ ] **Framework**: .NET 8
 - **Core Architecture**:
-  - [x] **DI Container**: **Autofac** (已就绪)
+  - [ ] **DI Container**: **Autofac** (已就绪)
   - [ ] **Logging**: **Serilog** (结构化日志)
   - [ ] **Error Handling**: **IExceptionHandler + ProblemDetails (RFC 7807)**
 - **Security**:
@@ -128,8 +128,8 @@ Infrastructure    MiniHR.Infrastructure      - EF Core DbContext (数据库上�
   - [ ] **Encryption**: BCrypt.Net-Next
 - **Data & Logic**:
   - [ ] **Web API**: ASP.NET Core Controllers (RESTful)
-  - [x] **Database**: PostgreSQL 16
-  - [x] **ORM**: Entity Framework Core (EF Core) 8
+  - [ ] **Database**: PostgreSQL 16
+  - [ ] **ORM**: Entity Framework Core (EF Core) 8
   - [ ] **Mapping**: AutoMapper
   - [ ] **Validation**: FluentValidation
 - **Testing (QA)**:
@@ -185,9 +185,10 @@ Infrastructure    MiniHR.Infrastructure      - EF Core DbContext (数据库上�
 - **[ ] 任务 4.3 (配置鉴权管道)**:
   - 在 `Program.cs` 配置 `AddAuthentication().AddJwtBearer(...)`。
   - **关键顺序**: 确保 `app.UseAuthentication()` 在 `app.UseAuthorization()` 之前。
-- **[ ] 任务 4.4 (配置 Policy 授权)**:
-  - 使用 `AddAuthorization` 定义策略 `"AdminOnly"` (RequireRole "Admin")。
-  - 在 `EmployeesController` 的写操作 (POST/PUT/DELETE) 上应用 `[Authorize(Policy = "AdminOnly")]`。
+- **[ ] 任务 4.4 (Role & Policy 混合授权策略)**:
+  - **基础 (Role-Based)**: 学习如何让 JWT 携带 `ClaimTypes.Role`，并理解基础的 `[Authorize(Roles = "Admin")]` 写法。
+  - **进阶 (Policy-Based)**: 学习现代 .NET 标准写法。在 `Program.cs` 使用 `AddAuthorization` 定义策略（例如 `"AdminOnly"`），将角色检查封装在策略中。
+  - **应用**: 将 `[Authorize(Policy = "AdminOnly")]` 应用于 `EmployeesController` 的增删改接口，实现读写分离控制。
 - **[ ] 任务 4.5 (Swagger 鉴权支持)**:
   - 配置 `AddSwaggerGen` 以支持 JWT Bearer 输入 (`OpenApiSecurityScheme`)。
   - *验收*: Swagger UI 出现“小锁”图标，输入 Token 后请求自动带上 Header。
@@ -218,3 +219,8 @@ Infrastructure    MiniHR.Infrastructure      - EF Core DbContext (数据库上�
   - **范围**: `WebAPI` 层 (Controller -> DB)。
   - **工具**: `WebApplicationFactory`, `Testcontainers` (PostgreSQL)。
   - **内容**: 验证 Auth 拦截 (401/403)、错误格式 (ProblemDetails) 和 完整 CRUD 流程。
+
+---
+
+### 未来计划
+后续会添加Resource-based的学习, 但需要重新讨论架构

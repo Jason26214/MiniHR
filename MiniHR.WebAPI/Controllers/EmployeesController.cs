@@ -29,6 +29,7 @@ namespace MiniHR.WebAPI.Controllers
 
         // GET /api/employees/{id}
         [HttpGet("{id:guid}")]
+        [ActionName(nameof(GetByIdAsync))]
         public async Task<ActionResult<EmployeeVO>> GetByIdAsync(Guid id)
         {
             var employee = await _employeeService.GetByIdAsync(id);
@@ -47,6 +48,7 @@ namespace MiniHR.WebAPI.Controllers
 
         // POST /api/employees
         [HttpPost]
+        [Authorize(Policy = "AdminOnly")] // only admin can create employees
         public async Task<ActionResult<EmployeeVO>> CreateAsync([FromBody] EmployeeDTO createEmployeeDto)
         {
             if (!ModelState.IsValid)
@@ -59,8 +61,7 @@ namespace MiniHR.WebAPI.Controllers
             return CreatedAtAction(
                 nameof(GetByIdAsync),
                 new { id = newEmployee.Id },
-                newEmployee
-            );
+                newEmployee);
         }
     }
 }

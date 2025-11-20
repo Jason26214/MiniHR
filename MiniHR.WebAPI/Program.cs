@@ -58,8 +58,11 @@ namespace MiniHR.WebAPI
                 cfg.AddProfile<MappingProfile>();
             }, typeof(MappingProfile).Assembly);
 
-            // WebAPI.Extensions.IdentityServiceExtensions
+            // WebAPI.Extensions.IdentityServiceExtensions (Authentication)
             builder.Services.AddIdentityServices(builder.Configuration);
+
+            // WebAPI.Extensions.AuthorizationServiceExtensions
+            builder.Services.AddMiniHRAuthorization();
 
             builder.Services.AddControllers();
 

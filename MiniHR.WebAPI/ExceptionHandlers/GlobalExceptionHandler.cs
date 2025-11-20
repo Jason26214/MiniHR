@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using MiniHR.Domain.Exceptions;
 
 namespace MiniHR.WebAPI.ExceptionHandlers
 {
@@ -17,30 +18,36 @@ namespace MiniHR.WebAPI.ExceptionHandlers
             Exception exception,
             CancellationToken cancellationToken)
         {
+            // 1. Log the error
+            _logger.LogError(exception, "An unhandled exception occurred: {Message}", exception.Message);
+
+            // 2. Core refactoring: Use switch expression to determine "Status" and "Title" based on exception type
+            var (statusCode, title, detail) = exception switch
             {
-                // error log to internal
-                _logger.LogError(
-                    exception,
-                    "An unhandled exception occurred: {Message}",
-                    exception.Message);
+                // If it's a "duplicate email exception", return 409 Conflict
+                DuplicateEmailException => (StatusCodes.Status409Conflict, "Conflict", exception.Message),
 
-                // from here to end. send error log to frontend
-                // RFC 7807 International Standard Defined "Error Response Format"
-                var problemDetails = new ProblemDetails
-                {
-                    Status = StatusCodes.Status500InternalServerError,
-                    Title = "Server Error",
-                    Detail = "An internal server error occurred. Please contact the administrator."
-                };
+                // In the future, if there's a "employee not found exception", add a line here
+                // NotFoundException => (StatusCodes.Status404NotFound, "Not Found", exception.Message),
 
-                // response to frontend
-                httpContext.Response.StatusCode = problemDetails.Status.Value;
+                // Default case: treat all as 500 Internal Server Error
+                _ => (StatusCodes.Status500InternalServerError, "Server Error", "An internal server error occurred.")
+            };
 
-                await httpContext.Response
-                    .WriteAsJsonAsync(problemDetails, cancellationToken);
+            // 3. Build standard RFC 7807 response body
+            var problemDetails = new ProblemDetails
+            {
+                Status = statusCode,
+                Title = title,
+                Detail = detail,
+                Instance = httpContext.Request.Path // Tell the frontend which endpoint caused the error
+            };
 
-                return true;
-            }
+            // 4. Send the response
+            httpContext.Response.StatusCode = statusCode;
+            await httpContext.Response.WriteAsJsonAsync(problemDetails, cancellationToken);
+
+            return true;
         }
     }
 }
