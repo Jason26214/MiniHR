@@ -43,6 +43,6 @@ namespace MiniHR.Infrastructure.Repositories
             await _context.Employees.AddAsync(employee);
         }
 
-        
+
     }
 }

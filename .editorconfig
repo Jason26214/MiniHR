@@ -1,0 +1,17 @@
+[*.cs]
+# 核心原则：关闭所有IDE0055（Roslyn格式化规则），避免VS原生格式化干扰
+dotnet_diagnostic.IDE0055.severity = none
+
+# 关闭StyleCop中与CSharpier冲突的排版规则
+# 括号位置相关
+dotnet_diagnostic.SA1500.severity = none
+# 语句换行相关
+dotnet_diagnostic.SA1501.severity = none 
+dotnet_diagnostic.SA1502.severity = none
+# 空行规则（CSharpier有自己的空行管理逻辑）
+dotnet_diagnostic.SA1505.severity = none 
+dotnet_diagnostic.SA1508.severity = none # 关闭括号前不应有空行的规则
+dotnet_diagnostic.SA1516.severity = none 
+# 参数列表与括号对齐
+dotnet_diagnostic.SA1111.severity = none # 允许右括号独立成行
+dotnet_diagnostic.SA1118.severity = none # 允许参数本身是多行结构
